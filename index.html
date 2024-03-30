@@ -146,7 +146,7 @@
 
             var cameraControls = new THREE.OrbitAndPanControls(camera, renderer.domElement);
             cameraControls.target.set(5.9, 2.8, 0);
-            // cameraControls.userZoom = false
+            cameraControls.userZoom = false
             cameraControls.userRotate = false
 
             var clock = new THREE.Clock();
@@ -321,19 +321,13 @@
                 if (keys_down[ev.keyCode] != true) {
                     var note = keyCode_to_note(ev.keyCode) - 3;
                     if (note != -1) {
-                        console.log("before conversion", note)
                         key_status("_" + note, keyState.note_on);
                         keys_down[ev.keyCode] = true;
-                        console.log(keys_down)
-
                         var delay = 0; // play one note every quarter second
                         var note = note + 24; // the MIDI note
-                        console.log("after Convert", note)
                         var velocity = 127; // how hard the note hits
                         MIDI.setVolume(0, 127);
                         MIDI.noteOn(0, note, velocity, delay);
-                        console.log(MIDI)
-
                     }
                 }
             }
@@ -356,6 +350,7 @@
             }
 
             window.onload = function () {
+                stopRecording(false);
                 MIDI.loadPlugin(function () {
                     //MIDI.Player.loadFile(song[0], MIDI.Player.start);
                     MIDI.Player.timeWarp = 1.0; // speed the song is played back
@@ -395,8 +390,19 @@
                         "Polonaise Ab major, Opus 53, Chopin": "chpn_op53.mid",
                         "No. 2 - Oriental, Granados": "gra_esp_2.mid",
                         "Bohemian Rhapsody, Queen": "bohemian1.mid",
+                        "Interstellar": "interstellar.mid",
+                        "Perfect Ed Sheeran": "Perfect Ed Sheeran.midi",
+                        "love nwantiti": "lovenwantiti.midi",
+                        "one direction Night Changes": "NightChanges.mid",
+                        "Ludovico Einaudi - Experience": "Ludovico Einaudi - Experience.mid",
+                        "Adele - Set Fire to the Rain": "SetFiretotheRain.mid",
+                        "Stan": "Stan.mid",
+                        "Billie Eilish - Hotline Bling": "Billie Eilish - Hotline Blin.mid",
+                        "Rema, Selena Gomez - Calm Down": "Rema, Selena Gomez - Calm Down.midi",
+                        "Tom Odell — Another Love": "Tom Odell — Another Love.mid",
+                        "Linkin Park — In the End": "Linkin Park — In the End.mid",
                     };
-                    var gui = new dat.GUI({ width: 625 });
+                    var gui = new dat.GUI({ width: 300 });
                     //gui.add(controls, 'key_attack_time', 2.0 , 40.0);
                     //gui.add(controls, 'key_max_rotation',0.2 , 1.0);                             
                     var song = gui.add(controls, 'song', songsToFiles);
@@ -453,10 +459,22 @@
         <script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');</script>
 
         <div id="info">
-            <h2 id="startButton">Kafka Streams for Piano</h2>
-            
+            <h2>Kafka Streams for Piano</h2>
+            <div class="row justify-content-start ml-1">
+                <div class="ml-4 btn-group">
+                    <div class="mr-2">
+                        <button class="btn btn-outline-success border border-info" onclick="startRecording()">Start</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-danger border border-info" onclick="stopRecording(true)">Stop</button>
+                    </div>
+                </div>
+            </div>
+            <div class="row justify-content-start ml-2">
+                <div id="recordingMessage"></div>
+            </div>
             <!-- Block to display SockJS events -->
-            <div class="row justify-content-start">
+            <div class="row justify-content-start ml-2">
                 <div class="col-md-4">
                     <h3 class="text-left">Kafka Events From MIDI Device</h3>
                     <div id="eventsBlock" class="event-block"></div>
@@ -465,11 +483,37 @@
         </div>
 
         <script>
+            
+            function startRecording() {
+                fetch("http://localhost:8081/start")
+                    .then(response => response.json())
+                    .then(data => {
+                    
+                        var eventsBlock = document.getElementById("recordingMessage");
+                        var eventText = document.createElement("h4");
+                        eventText.textContent = data['message'];
+                        eventsBlock.appendChild(eventText);
+
+                    })
+                    .catch(error => console.error('Error:', error));
+                
+            }
+
+            function stopRecording(showMessage) {
+                fetch("http://localhost:8081/stop").then((response) => response.json())
+                .then(data => {
+                    if(showMessage) {
+                        var eventsBlock = document.getElementById("recordingMessage");
+                        var eventText = document.createElement("h4");
+                        eventText.textContent = data['message'];
+                        eventsBlock.appendChild(eventText);
+                    }
+                })
+            }
 
             var socket = new SockJS('http://localhost:8081/midi-events');
             stompClient = Stomp.over(socket);
             stompClient.connect({}, function (frame) {
-                console.log('Connected: ' + frame);
                 stompClient.subscribe('/topic/midi-events', function (messageOutput) {
                     var eventsBlock = document.getElementById("eventsBlock");
                     var eventText = document.createElement("span");
@@ -480,7 +524,6 @@
                     eventsBlock.scrollTop = eventsBlock.scrollHeight;
 
                     var message = JSON.parse(messageOutput.body);
-                    console.log(message)
                     handleMessage(message);
                 });
             });
@@ -507,7 +550,6 @@
                     var noteName = message.noteName;
                     var noteNum = note - 24;
                     key_status("_" + noteNum, keyState.note_on);
-                    console.log(MIDI)
                 } else if (message.eventType === 'Note Off') {
                     // Trigger note off event
                     var note = message.noteNum;
